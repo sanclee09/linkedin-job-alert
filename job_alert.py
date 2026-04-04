@@ -51,6 +51,19 @@ EXCLUDE_TITLE_KEYWORDS = [
 # -----------------------------------------------------------------------------
 
 
+def _normalize_title(title: str) -> str:
+    """Strip gender tags, location suffixes, and whitespace for comparison."""
+    t = title.strip().lower()
+    # Remove gender markers like (m/w/d), (f/m/d), (all genders), (w/m/d), (m/f/d) etc.
+    t = re.sub(r"\s*\([mfwdx/]+\)", "", t)
+    t = re.sub(r"\s*\(all genders?\)", "", t)
+    # Remove location / office suffixes after " - " or " – "
+    t = re.split(r"\s+[-–]\s+", t)[0]
+    # Remove trailing whitespace and common noise
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
 def _job_key(title: str, company: str) -> str:
     """Normalize title+company into a comparable key."""
     return f"{title.strip().lower()}@{company.strip().lower()}"
@@ -70,53 +83,82 @@ def save_applied_jobs(applied: set):
         json.dump(list(applied), f)
 
 
+def _decode_header(raw_header: str) -> str:
+    """Decode an email header value to a plain string."""
+    parts = email_lib.header.decode_header(raw_header)
+    decoded = []
+    for part, charset in parts:
+        if isinstance(part, bytes):
+            decoded.append(part.decode(charset or "utf-8", errors="replace"))
+        else:
+            decoded.append(part)
+    return " ".join(decoded)
+
+
 def fetch_applied_jobs_from_gmail() -> set[str]:
-    """Fetch title+company keys of jobs already applied to via Gmail IMAP."""
+    """Fetch applied job titles via Gmail IMAP (LinkedIn + direct applications)."""
     if not GMAIL_APP_PASSWORD:
         return set()
-    applied_keys = set()
+    applied_titles: set[str] = set()
     try:
         mail = imaplib.IMAP4_SSL("imap.gmail.com")
         mail.login(SENDER_EMAIL, GMAIL_APP_PASSWORD)
         mail.select('"[Gmail]/All Mail"')
+
+        # --- 1) LinkedIn application confirmations ---
         _, data = mail.search(None, 'FROM "jobs-noreply@linkedin.com" SUBJECT "application was sent"')
-        msg_ids = data[0].split()
-        for msg_id in msg_ids:
+        for msg_id in data[0].split():
             _, msg_data = mail.fetch(msg_id, "(RFC822)")
             msg = email_lib.message_from_bytes(msg_data[0][1])
-            # Extract company from subject
-            subject = str(email_lib.header.decode_header(msg["Subject"])[0][0])
-            if isinstance(subject, bytes):
-                subject = subject.decode()
-            company_match = re.search(r"application was sent to (.+)$", subject)
-            if not company_match:
-                continue
-            company = company_match.group(1).strip()
-            # Extract job title from HTML body (first jobs/view link with text)
-            title = ""
             for part in msg.walk():
                 if part.get_content_type() == "text/html":
                     html = part.get_payload(decode=True).decode("utf-8", errors="replace")
                     for link_match in re.finditer(
-                        r'<a[^>]*href="[^"]*jobs/view[^"]*"[^>]*>(.*?)</a>',
-                        html, re.S,
+                        r'<a[^>]*href="[^"]*jobs/view[^"]*"[^>]*>(.*?)</a>', html, re.S,
                     ):
                         text = re.sub(r"<[^>]+>", "", link_match.group(1)).strip()
                         text = text.replace("&amp;", "&")
                         if text:
-                            title = text
+                            applied_titles.add(_normalize_title(text))
                             break
                     break
-            if title:
-                applied_keys.add(_job_key(title, company))
-            else:
-                # Fallback: store company-only key so we at least filter something
-                applied_keys.add(f"*@{company.lower()}")
+
+        # --- 2) Direct application confirmations (Bewerbung / application) ---
+        _, data2 = mail.search(
+            None, 'OR SUBJECT "Deine Bewerbung als" SUBJECT "Your application for"',
+        )
+        # Common patterns:
+        #   "Deine Bewerbung als AI Engineer (m/w/d) - München oder Mobile Office"
+        #   "Your application for the position of AI Technology Expert (m/f/d)"
+        #   "INVENSITY - Deine Bewerbung als Data Science Consultant (m/w/d)"
+        patterns = [
+            r"Bewerbung als (.+)",
+            r"[Yy]our application (?:for |as )(?:the position of )?(.+)",
+            r"Bewerbung auf die (?:Stelle|Position) (.+)",
+            r"[Cc]onfirmation of your application.*?[-–]\s*(.+)",
+        ]
+        for msg_id in data2[0].split():
+            _, msg_data = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (SUBJECT FROM)])")
+            msg = email_lib.message_from_bytes(msg_data[0][1])
+            sender = str(msg.get("From", ""))
+            if SENDER_EMAIL in sender:
+                continue  # skip own replies
+            subject = _decode_header(msg["Subject"]) if msg["Subject"] else ""
+            for pattern in patterns:
+                m = re.search(pattern, subject)
+                if m:
+                    title = m.group(1).strip()
+                    # Clean trailing company info after common separators
+                    title = re.split(r"\s+bei\s+|\s+at\s+|\s+[-–|]\s+", title)[0].strip()
+                    if title:
+                        applied_titles.add(_normalize_title(title))
+                    break
+
         mail.logout()
-        print(f"  Gmail IMAP: found {len(applied_keys)} applied jobs")
+        print(f"  Gmail IMAP: found {len(applied_titles)} applied job titles")
     except Exception as e:
         print(f"  [WARN] Gmail IMAP failed: {e}", file=sys.stderr)
-    return applied_keys
+    return applied_titles
 
 
 def load_seen_jobs() -> set:
@@ -183,12 +225,12 @@ def search_jobs() -> list[dict]:
         except Exception as e:
             print(f"  [WARN] Search failed for {query!r}: {e}", file=sys.stderr)
 
-    # Filter out already-applied jobs (via Gmail IMAP, title+company match)
-    applied_keys = fetch_applied_jobs_from_gmail()
+    # Filter out already-applied jobs (via Gmail IMAP, title match)
+    applied_titles = fetch_applied_jobs_from_gmail()
     before = len(all_jobs)
     all_jobs = [
         j for j in all_jobs
-        if _job_key(j["title"], j["company"]) not in applied_keys
+        if _normalize_title(j["title"]) not in applied_titles
     ]
     if before != len(all_jobs):
         print(f"  Filtered {before - len(all_jobs)} already-applied jobs")
