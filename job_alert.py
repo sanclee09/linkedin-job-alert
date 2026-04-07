@@ -47,6 +47,7 @@ APPLIED_JOBS_FILE = Path(os.environ.get("APPLIED_JOBS_FILE", Path.home() / ".lin
 EXCLUDE_TITLE_KEYWORDS = [
     "senior", "staff", "principal", "lead", "head of", "director", "vp ",
     "vice president", "manager", "architect", "working student", "werkstudent",
+    "business intelligence", " bi ", "bi developer", "bi analyst",
 ]
 # -----------------------------------------------------------------------------
 
