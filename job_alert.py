@@ -44,6 +44,8 @@ SEARCH_QUERIES_JUNIOR = [
     "Junior Data Scientist",
     "Junior AI Engineer",
     "Junior ML Engineer",
+    "Trainee Data Science AI",
+    "Graduate Program Data AI",
 ]
 LOCATION   = "Munich, Germany"
 HOURS_OLD  = 168   # past week
