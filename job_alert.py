@@ -47,7 +47,7 @@ SEARCH_QUERIES_JUNIOR = [
 ]
 LOCATION   = "Munich, Germany"
 HOURS_OLD  = 168   # past week
-TOP_N      = 5  # total: 2 Praktikum + 1 Junior + 2 Fulltime
+TOP_N      = 5  # total: 1 Praktikum + 1 Junior + 3 Fulltime
 
 EXCLUDE_COMPANIES = {
     "bmw group",
@@ -282,8 +282,15 @@ def search_jobs() -> list[dict]:
     junior_jobs = _sort_newest(junior_jobs)
     fulltime_jobs = _sort_newest(fulltime_jobs)
 
-    # Compose: 2 Praktikum + 1 Junior + 2 Fulltime
-    result = praktikum_jobs[:2] + junior_jobs[:1] + fulltime_jobs[:2]
+    # Compose: 1 Praktikum + 1+ Junior (preferred) + rest Fulltime
+    result = praktikum_jobs[:1]
+    result += junior_jobs[:1]
+    remaining = 5 - len(result)
+    # Fill rest with fulltime, but if more junior available, prefer those
+    extra_junior = junior_jobs[1:1 + remaining]
+    result += extra_junior
+    remaining -= len(extra_junior)
+    result += fulltime_jobs[:remaining]
 
     print(f"  Pool: {len(praktikum_jobs)} Praktikum, {len(junior_jobs)} Junior, {len(fulltime_jobs)} Fulltime")
     return result
@@ -354,7 +361,7 @@ def build_email_html(jobs: list[dict]) -> str:
         {today} · AI/ML · NLP · Data Science · Munich
       </div>
       <div style="color:#93c5fd;font-size:12px;margin-top:4px;">
-        2 Praktikum + 1 Junior + 2 Fulltime
+        1 Praktikum + Junior preferred + Fulltime
       </div>
     </div>
     <div style="background:#f3f4f6;padding:24px 0;">

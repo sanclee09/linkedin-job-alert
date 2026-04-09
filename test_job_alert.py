@@ -475,7 +475,7 @@ class TestFilterAndSort:
 class TestSearchJobs:
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
     @mock.patch("job_alert.scrape_jobs")
-    def test_returns_2_praktikum_1_junior_2_fulltime(self, mock_scrape, mock_gmail):
+    def test_returns_1_praktikum_junior_preferred_rest_fulltime(self, mock_scrape, mock_gmail):
         def fake_scrape(**kwargs):
             term = kwargs.get("search_term", "")
             if "Praktikum" in term or "Internship" in term:
@@ -504,14 +504,11 @@ class TestSearchJobs:
         result = job_alert.search_jobs()
 
         assert len(result) == 5
-        # First 2 should be Praktikum
+        # First should be Praktikum
         assert "Praktikum" in result[0]["title"]
-        assert "Praktikum" in result[1]["title"]
-        # Third should be Junior
-        assert "Junior" in result[2]["title"]
-        # Last 2 should be fulltime
-        assert "AI Engineer" in result[3]["title"]
-        assert "AI Engineer" in result[4]["title"]
+        # At least 1 Junior
+        junior_count = sum(1 for j in result if "Junior" in j["title"])
+        assert junior_count >= 1
 
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
     @mock.patch("job_alert.scrape_jobs", return_value=pd.DataFrame())
