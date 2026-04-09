@@ -2,8 +2,8 @@ name: LinkedIn Job Alert
 
 on:
   schedule:
-    # Every day at 06:00 UTC = 08:00 CEST (summer) / 07:00 CET (winter)
-    - cron: "0 6 * * *"
+    # Every day at 01:00 UTC = 03:00 CEST (summer) / 02:00 CET (winter)
+    - cron: "0 1 * * *"
   workflow_dispatch: # allow manual trigger from GitHub UI
 
 jobs:
