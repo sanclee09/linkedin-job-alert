@@ -375,121 +375,148 @@ class TestFetchAppliedJobsFromGmail:
 
 
 # ---------------------------------------------------------------------------
-# search_jobs (with mocked scrape_jobs and IMAP)
+# _scrape_queries
 # ---------------------------------------------------------------------------
-class TestSearchJobs:
-    @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
-    @mock.patch("job_alert.scrape_jobs")
-    def test_excludes_senior_titles(self, mock_scrape, mock_gmail):
+class TestScrapeQueries:
+    def test_excludes_senior_titles(self):
         df = pd.DataFrame([
             {"id": "1", "title": "Senior AI Engineer", "company": "Co", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
             {"id": "2", "title": "AI Engineer", "company": "Co", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
         ])
-        mock_scrape.return_value = df
-
-        with mock.patch.object(job_alert, "SEARCH_QUERIES", ["test"]):
-            result = job_alert.search_jobs()
-
+        with mock.patch("job_alert.scrape_jobs", return_value=df):
+            result = job_alert._scrape_queries(["test"], set())
         titles = [j["title"] for j in result]
         assert "AI Engineer" in titles
         assert "Senior AI Engineer" not in titles
 
-    @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
-    @mock.patch("job_alert.scrape_jobs")
-    def test_excludes_working_student(self, mock_scrape, mock_gmail):
+    def test_excludes_working_student(self):
         df = pd.DataFrame([
             {"id": "1", "title": "Working Student ML", "company": "Co", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
             {"id": "2", "title": "ML Engineer", "company": "Co", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
         ])
-        mock_scrape.return_value = df
-
-        with mock.patch.object(job_alert, "SEARCH_QUERIES", ["test"]):
-            result = job_alert.search_jobs()
-
+        with mock.patch("job_alert.scrape_jobs", return_value=df):
+            result = job_alert._scrape_queries(["test"], set())
         titles = [j["title"] for j in result]
         assert "ML Engineer" in titles
         assert "Working Student ML" not in titles
 
-    @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
-    @mock.patch("job_alert.scrape_jobs")
-    def test_excludes_bi_titles(self, mock_scrape, mock_gmail):
+    def test_excludes_bi_titles(self):
         df = pd.DataFrame([
             {"id": "1", "title": "Business Intelligence Analyst", "company": "Co", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
             {"id": "2", "title": "Data Scientist", "company": "Co", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
         ])
-        mock_scrape.return_value = df
-
-        with mock.patch.object(job_alert, "SEARCH_QUERIES", ["test"]):
-            result = job_alert.search_jobs()
-
+        with mock.patch("job_alert.scrape_jobs", return_value=df):
+            result = job_alert._scrape_queries(["test"], set())
         titles = [j["title"] for j in result]
         assert "Data Scientist" in titles
         assert "Business Intelligence Analyst" not in titles
 
-    @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value={"ai engineer"})
-    @mock.patch("job_alert.scrape_jobs")
-    def test_filters_applied_jobs(self, mock_scrape, mock_gmail):
+    def test_excludes_blocked_companies(self):
         df = pd.DataFrame([
-            {"id": "1", "title": "AI Engineer (m/w/d)", "company": "Co", "location": "Munich",
+            {"id": "1", "title": "AI Engineer", "company": "BMW Group", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-            {"id": "2", "title": "Data Scientist", "company": "Co", "location": "Munich",
+            {"id": "2", "title": "AI Engineer", "company": "Celonis", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
         ])
-        mock_scrape.return_value = df
+        with mock.patch("job_alert.scrape_jobs", return_value=df):
+            result = job_alert._scrape_queries(["test"], set())
+        companies = [j["company"] for j in result]
+        assert "Celonis" in companies
+        assert "BMW Group" not in companies
 
-        with mock.patch.object(job_alert, "SEARCH_QUERIES", ["test"]):
-            result = job_alert.search_jobs()
-
-        titles = [j["title"] for j in result]
-        assert "Data Scientist" in titles
-        assert "AI Engineer (m/w/d)" not in titles
-
-    @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
-    @mock.patch("job_alert.scrape_jobs")
-    def test_deduplicates_by_job_id(self, mock_scrape, mock_gmail):
+    def test_deduplicates_by_job_id(self):
         df = pd.DataFrame([
             {"id": "same-id", "title": "AI Engineer", "company": "Co", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
             {"id": "same-id", "title": "AI Engineer", "company": "Co", "location": "Munich",
              "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
         ])
-        mock_scrape.return_value = df
-
-        with mock.patch.object(job_alert, "SEARCH_QUERIES", ["test"]):
-            result = job_alert.search_jobs()
-
+        with mock.patch("job_alert.scrape_jobs", return_value=df):
+            result = job_alert._scrape_queries(["test"], set())
         assert len(result) == 1
 
+    def test_handles_scrape_error(self):
+        with mock.patch("job_alert.scrape_jobs", side_effect=Exception("Network error")):
+            result = job_alert._scrape_queries(["test"], set())
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _filter_applied / _sort_newest
+# ---------------------------------------------------------------------------
+class TestFilterAndSort:
+    def test_filter_applied(self):
+        jobs = [
+            {"title": "AI Engineer (m/w/d)", "job_id": "1"},
+            {"title": "Data Scientist", "job_id": "2"},
+        ]
+        result = job_alert._filter_applied(jobs, {"ai engineer"})
+        assert len(result) == 1
+        assert result[0]["title"] == "Data Scientist"
+
+    def test_sort_newest(self):
+        jobs = [
+            {"title": "Old", "date_posted": datetime(2026, 4, 1)},
+            {"title": "New", "date_posted": datetime(2026, 4, 5)},
+        ]
+        result = job_alert._sort_newest(jobs)
+        assert result[0]["title"] == "New"
+
+
+# ---------------------------------------------------------------------------
+# search_jobs (integration with categories)
+# ---------------------------------------------------------------------------
+class TestSearchJobs:
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
     @mock.patch("job_alert.scrape_jobs")
-    def test_sorts_by_date_newest_first(self, mock_scrape, mock_gmail):
-        df = pd.DataFrame([
-            {"id": "1", "title": "Old Job", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "d", "job_url": "https://example.com",
-             "date_posted": datetime(2026, 4, 1)},
-            {"id": "2", "title": "New Job", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "d", "job_url": "https://example.com",
-             "date_posted": datetime(2026, 4, 5)},
-        ])
-        mock_scrape.return_value = df
+    def test_returns_2_praktikum_1_junior_2_fulltime(self, mock_scrape, mock_gmail):
+        def fake_scrape(**kwargs):
+            term = kwargs.get("search_term", "")
+            if "Praktikum" in term or "Internship" in term:
+                return pd.DataFrame([
+                    {"id": f"p-{i}-{term[:5]}", "title": f"Praktikum AI {i}", "company": "Co",
+                     "location": "Munich", "is_remote": False, "description": "d",
+                     "job_url": "https://example.com", "date_posted": None}
+                    for i in range(5)
+                ])
+            elif "Junior" in term:
+                return pd.DataFrame([
+                    {"id": f"j-{i}-{term[:5]}", "title": f"Junior Data Scientist {i}", "company": "Co",
+                     "location": "Munich", "is_remote": False, "description": "d",
+                     "job_url": "https://example.com", "date_posted": None}
+                    for i in range(3)
+                ])
+            else:
+                return pd.DataFrame([
+                    {"id": f"f-{i}-{term[:5]}", "title": f"AI Engineer {i}", "company": "Co",
+                     "location": "Munich", "is_remote": False, "description": "d",
+                     "job_url": "https://example.com", "date_posted": None}
+                    for i in range(5)
+                ])
 
-        with mock.patch.object(job_alert, "SEARCH_QUERIES", ["test"]):
-            result = job_alert.search_jobs()
+        mock_scrape.side_effect = fake_scrape
+        result = job_alert.search_jobs()
 
-        assert result[0]["title"] == "New Job"
-        assert result[1]["title"] == "Old Job"
+        assert len(result) == 5
+        # First 2 should be Praktikum
+        assert "Praktikum" in result[0]["title"]
+        assert "Praktikum" in result[1]["title"]
+        # Third should be Junior
+        assert "Junior" in result[2]["title"]
+        # Last 2 should be fulltime
+        assert "AI Engineer" in result[3]["title"]
+        assert "AI Engineer" in result[4]["title"]
 
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
-    @mock.patch("job_alert.scrape_jobs", side_effect=Exception("Network error"))
-    def test_handles_scrape_error(self, mock_scrape, mock_gmail):
-        with mock.patch.object(job_alert, "SEARCH_QUERIES", ["test"]):
-            result = job_alert.search_jobs()
+    @mock.patch("job_alert.scrape_jobs", return_value=pd.DataFrame())
+    def test_handles_empty_results(self, mock_scrape, mock_gmail):
+        result = job_alert.search_jobs()
         assert result == []
 
 

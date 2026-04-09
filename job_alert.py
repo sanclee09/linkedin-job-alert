@@ -27,7 +27,7 @@ RECIPIENT_EMAIL    = "sang.h.lee09@gmail.com"
 SENDER_EMAIL       = "sang.h.lee09@gmail.com"
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 
-SEARCH_QUERIES = [
+SEARCH_QUERIES_FULLTIME = [
     "AI Engineer LLM RAG",
     "Data Scientist NLP Python",
     "ML Engineer Deep Learning",
@@ -35,9 +35,23 @@ SEARCH_QUERIES = [
     "AI Consultant GenAI",
     "Quant Data Scientist",
 ]
+SEARCH_QUERIES_PRAKTIKUM = [
+    "Praktikum Data Science AI",
+    "Internship Machine Learning",
+    "Praktikum KI NLP",
+]
+SEARCH_QUERIES_JUNIOR = [
+    "Junior Data Scientist",
+    "Junior AI Engineer",
+    "Junior ML Engineer",
+]
 LOCATION   = "Munich, Germany"
 HOURS_OLD  = 168   # past week
-TOP_N      = 5
+TOP_N      = 5  # total: 2 Praktikum + 1 Junior + 2 Fulltime
+
+EXCLUDE_COMPANIES = {
+    "bmw group",
+}
 
 SEEN_JOBS_FILE = Path(os.environ.get("SEEN_JOBS_FILE", Path.home() / ".linkedin_job_alert_seen.json"))
 
@@ -187,11 +201,10 @@ def detect_work_type(row: pd.Series) -> str:
     return "On-site"
 
 
-def search_jobs() -> list[dict]:
-    all_jobs: list[dict] = []
-    seen_ids: set[str] = set()
-
-    for query in SEARCH_QUERIES:
+def _scrape_queries(queries: list[str], seen_ids: set[str]) -> list[dict]:
+    """Run scrape_jobs for each query and return deduplicated, filtered results."""
+    jobs: list[dict] = []
+    for query in queries:
         print(f"  Searching: {query!r} in {LOCATION}")
         try:
             df = scrape_jobs(
@@ -212,11 +225,15 @@ def search_jobs() -> list[dict]:
                 if any(kw in title.lower() for kw in EXCLUDE_TITLE_KEYWORDS):
                     continue
 
+                company = str(row.get("company", "Unknown Company"))
+                if company.strip().lower() in EXCLUDE_COMPANIES:
+                    continue
+
                 desc = str(row.get("description", ""))
-                all_jobs.append({
+                jobs.append({
                     "job_id":      job_id,
                     "title":       title,
-                    "company":     str(row.get("company", "Unknown Company")),
+                    "company":     company,
                     "location":    str(row.get("location", LOCATION)),
                     "work_type":   detect_work_type(row),
                     "description": desc[:300].strip(),
@@ -225,23 +242,51 @@ def search_jobs() -> list[dict]:
                 })
         except Exception as e:
             print(f"  [WARN] Search failed for {query!r}: {e}", file=sys.stderr)
+    return jobs
 
-    # Filter out already-applied jobs (via Gmail IMAP, title match)
-    applied_titles = fetch_applied_jobs_from_gmail()
-    before = len(all_jobs)
-    all_jobs = [
-        j for j in all_jobs
-        if _normalize_title(j["title"]) not in applied_titles
-    ]
-    if before != len(all_jobs):
-        print(f"  Filtered {before - len(all_jobs)} already-applied jobs")
 
-    # Sort newest first
-    all_jobs.sort(
+def _filter_applied(jobs: list[dict], applied_titles: set[str]) -> list[dict]:
+    """Remove jobs whose normalized title matches an already-applied title."""
+    before = len(jobs)
+    filtered = [j for j in jobs if _normalize_title(j["title"]) not in applied_titles]
+    if before != len(filtered):
+        print(f"  Filtered {before - len(filtered)} already-applied jobs")
+    return filtered
+
+
+def _sort_newest(jobs: list[dict]) -> list[dict]:
+    """Sort jobs by date_posted descending."""
+    return sorted(
+        jobs,
         key=lambda j: j["date_posted"] if isinstance(j["date_posted"], datetime) else datetime.min,
         reverse=True,
     )
-    return all_jobs
+
+
+def search_jobs() -> list[dict]:
+    seen_ids: set[str] = set()
+    applied_titles = fetch_applied_jobs_from_gmail()
+
+    # Scrape each category
+    praktikum_jobs = _scrape_queries(SEARCH_QUERIES_PRAKTIKUM, seen_ids)
+    junior_jobs = _scrape_queries(SEARCH_QUERIES_JUNIOR, seen_ids)
+    fulltime_jobs = _scrape_queries(SEARCH_QUERIES_FULLTIME, seen_ids)
+
+    # Filter applied
+    praktikum_jobs = _filter_applied(praktikum_jobs, applied_titles)
+    junior_jobs = _filter_applied(junior_jobs, applied_titles)
+    fulltime_jobs = _filter_applied(fulltime_jobs, applied_titles)
+
+    # Sort each category
+    praktikum_jobs = _sort_newest(praktikum_jobs)
+    junior_jobs = _sort_newest(junior_jobs)
+    fulltime_jobs = _sort_newest(fulltime_jobs)
+
+    # Compose: 2 Praktikum + 1 Junior + 2 Fulltime
+    result = praktikum_jobs[:2] + junior_jobs[:1] + fulltime_jobs[:2]
+
+    print(f"  Pool: {len(praktikum_jobs)} Praktikum, {len(junior_jobs)} Junior, {len(fulltime_jobs)} Fulltime")
+    return result
 
 
 def build_email_html(jobs: list[dict]) -> str:
@@ -308,6 +353,9 @@ def build_email_html(jobs: list[dict]) -> str:
       <div style="color:#bfdbfe;font-size:14px;margin-top:4px;">
         {today} · AI/ML · NLP · Data Science · Munich
       </div>
+      <div style="color:#93c5fd;font-size:12px;margin-top:4px;">
+        2 Praktikum + 1 Junior + 2 Fulltime
+      </div>
     </div>
     <div style="background:#f3f4f6;padding:24px 0;">
       <div style="color:#6b7280;font-size:13px;margin-bottom:16px;">
@@ -341,18 +389,15 @@ def main():
     seen_jobs = load_seen_jobs()
     print(f"  Previously seen: {len(seen_jobs)} jobs")
 
-    raw_jobs = search_jobs()
-    print(f"  Found {len(raw_jobs)} unique jobs")
+    jobs = search_jobs()
+    jobs = [j for j in jobs if j["job_id"] not in seen_jobs]
+    print(f"  New (unseen): {len(jobs)}")
 
-    new_jobs = [j for j in raw_jobs if j["job_id"] not in seen_jobs]
-    print(f"  New (unseen): {len(new_jobs)}")
-
-    if not new_jobs:
+    if not jobs:
         print("  No new jobs today — skipping email.")
         return
 
-    top = new_jobs[:TOP_N]
-    html = build_email_html(top)
+    html = build_email_html(jobs)
 
     if not GMAIL_APP_PASSWORD:
         preview = Path("/tmp/job_alert_preview.html")
@@ -360,10 +405,10 @@ def main():
         print(f"[ERROR] GMAIL_APP_PASSWORD not set. Preview saved to {preview}")
         sys.exit(1)
 
-    send_email(html, len(top))
+    send_email(html, len(jobs))
     print(f"  ✓ Email sent to {RECIPIENT_EMAIL}")
 
-    seen_jobs.update(j["job_id"] for j in new_jobs)
+    seen_jobs.update(j["job_id"] for j in jobs)
     save_seen_jobs(seen_jobs)
     print("  Seen jobs DB updated.")
 
