@@ -516,6 +516,42 @@ class TestSearchJobs:
         result = job_alert.search_jobs()
         assert result == []
 
+    @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
+    @mock.patch("job_alert.scrape_jobs")
+    def test_excludes_seen_jobs_before_composing(self, mock_scrape, mock_gmail):
+        def fake_scrape(**kwargs):
+            term = kwargs.get("search_term", "")
+            if "Praktikum" in term or "Internship" in term:
+                return pd.DataFrame([
+                    {"id": f"p-{i}-{term[:5]}", "title": f"Praktikum AI {i}", "company": "Co",
+                     "location": "Munich", "is_remote": False, "description": "d",
+                     "job_url": "https://example.com", "date_posted": None}
+                    for i in range(5)
+                ])
+            elif "Junior" in term or "Trainee" in term or "Graduate" in term:
+                return pd.DataFrame([
+                    {"id": f"j-{i}-{term[:5]}", "title": f"Junior DS {i}", "company": "Co",
+                     "location": "Munich", "is_remote": False, "description": "d",
+                     "job_url": "https://example.com", "date_posted": None}
+                    for i in range(5)
+                ])
+            else:
+                return pd.DataFrame([
+                    {"id": f"f-{i}-{term[:5]}", "title": f"AI Engineer {i}", "company": "Co",
+                     "location": "Munich", "is_remote": False, "description": "d",
+                     "job_url": "https://example.com", "date_posted": None}
+                    for i in range(5)
+                ])
+
+        mock_scrape.side_effect = fake_scrape
+        # Mark some jobs as seen
+        seen = {"p-0-Prakt", "j-0-Junio", "f-0-AI En"}
+        result = job_alert.search_jobs(seen_jobs=seen)
+        # Should still get 5 results, pulling from deeper in each pool
+        assert len(result) == 5
+        seen_ids = {j["job_id"] for j in result}
+        assert seen_ids.isdisjoint(seen)
+
 
 # ---------------------------------------------------------------------------
 # main (integration-level)
@@ -543,13 +579,10 @@ class TestMain:
         mock_send.assert_not_called()
 
     @mock.patch("job_alert.send_email")
-    @mock.patch("job_alert.search_jobs")
-    @mock.patch("job_alert.load_seen_jobs")
-    def test_skips_already_seen_jobs(self, mock_load, mock_search, mock_send):
-        mock_load.return_value = {"1"}
-        mock_search.return_value = [
-            {"job_id": "1", "title": "AI Eng", "company": "Co", "location": "Munich",
-             "work_type": "Remote", "description": "d", "url": "https://example.com", "date_posted": None}
-        ]
+    @mock.patch("job_alert.search_jobs", return_value=[])
+    @mock.patch("job_alert.load_seen_jobs", return_value={"1"})
+    def test_skips_when_search_returns_empty(self, mock_load, mock_search, mock_send):
         job_alert.main()
         mock_send.assert_not_called()
+        # search_jobs is called with seen_jobs set
+        mock_search.assert_called_once_with({"1"})

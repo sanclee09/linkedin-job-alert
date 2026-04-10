@@ -265,30 +265,26 @@ def _sort_newest(jobs: list[dict]) -> list[dict]:
     )
 
 
-def search_jobs() -> list[dict]:
+def search_jobs(seen_jobs: set | None = None) -> list[dict]:
     seen_ids: set[str] = set()
+    if seen_jobs is None:
+        seen_jobs = set()
     applied_titles = fetch_applied_jobs_from_gmail()
 
-    # Scrape each category
-    praktikum_jobs = _scrape_queries(SEARCH_QUERIES_PRAKTIKUM, seen_ids)
-    junior_jobs = _scrape_queries(SEARCH_QUERIES_JUNIOR, seen_ids)
-    fulltime_jobs = _scrape_queries(SEARCH_QUERIES_FULLTIME, seen_ids)
+    def _prepare(queries):
+        jobs = _scrape_queries(queries, seen_ids)
+        jobs = _filter_applied(jobs, applied_titles)
+        jobs = [j for j in jobs if j["job_id"] not in seen_jobs]
+        return _sort_newest(jobs)
 
-    # Filter applied
-    praktikum_jobs = _filter_applied(praktikum_jobs, applied_titles)
-    junior_jobs = _filter_applied(junior_jobs, applied_titles)
-    fulltime_jobs = _filter_applied(fulltime_jobs, applied_titles)
-
-    # Sort each category
-    praktikum_jobs = _sort_newest(praktikum_jobs)
-    junior_jobs = _sort_newest(junior_jobs)
-    fulltime_jobs = _sort_newest(fulltime_jobs)
+    praktikum_jobs = _prepare(SEARCH_QUERIES_PRAKTIKUM)
+    junior_jobs = _prepare(SEARCH_QUERIES_JUNIOR)
+    fulltime_jobs = _prepare(SEARCH_QUERIES_FULLTIME)
 
     # Compose: 1 Praktikum + 1+ Junior (preferred) + rest Fulltime
     result = praktikum_jobs[:1]
     result += junior_jobs[:1]
     remaining = 5 - len(result)
-    # Fill rest with fulltime, but if more junior available, prefer those
     extra_junior = junior_jobs[1:1 + remaining]
     result += extra_junior
     remaining -= len(extra_junior)
@@ -398,9 +394,8 @@ def main():
     seen_jobs = load_seen_jobs()
     print(f"  Previously seen: {len(seen_jobs)} jobs")
 
-    jobs = search_jobs()
-    jobs = [j for j in jobs if j["job_id"] not in seen_jobs]
-    print(f"  New (unseen): {len(jobs)}")
+    jobs = search_jobs(seen_jobs)
+    print(f"  Selected: {len(jobs)} jobs")
 
     if not jobs:
         print("  No new jobs today — skipping email.")
