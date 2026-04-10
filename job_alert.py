@@ -47,6 +47,12 @@ SEARCH_QUERIES_JUNIOR = [
     "Trainee Data Science AI",
     "Graduate Program Data AI",
 ]
+SEARCH_QUERIES_INITIATIVE = [
+    "Initiativbewerbung Data",
+    "Initiativbewerbung IT",
+    "Initiativbewerbung Technologie",
+]
+SEARCH_SITES = ["linkedin", "indeed", "glassdoor", "google"]
 LOCATION   = "Munich, Germany"
 HOURS_OLD  = 168   # past week
 TOP_N      = 5  # total: 1 Praktikum + 1 Junior + 3 Fulltime
@@ -210,9 +216,10 @@ def _scrape_queries(queries: list[str], seen_ids: set[str]) -> list[dict]:
         print(f"  Searching: {query!r} in {LOCATION}")
         try:
             df = scrape_jobs(
-                site_name=["linkedin"],
+                site_name=SEARCH_SITES,
                 search_term=query,
                 location=LOCATION,
+                country_indeed="germany",
                 results_wanted=15,
                 hours_old=HOURS_OLD,
                 linkedin_fetch_description=True,
@@ -280,17 +287,24 @@ def search_jobs(seen_jobs: set | None = None) -> list[dict]:
     praktikum_jobs = _prepare(SEARCH_QUERIES_PRAKTIKUM)
     junior_jobs = _prepare(SEARCH_QUERIES_JUNIOR)
     fulltime_jobs = _prepare(SEARCH_QUERIES_FULLTIME)
+    initiative_jobs = _prepare(SEARCH_QUERIES_INITIATIVE)
 
-    # Compose: 1 Praktikum + 1+ Junior (preferred) + rest Fulltime
+    # Compose: 1 Praktikum + 1+ Junior (preferred) + rest Fulltime + 1 Initiative (bonus)
     result = praktikum_jobs[:1]
     result += junior_jobs[:1]
     remaining = 5 - len(result)
+    # If initiative available, reserve 1 slot
+    if initiative_jobs:
+        remaining -= 1
     extra_junior = junior_jobs[1:1 + remaining]
     result += extra_junior
     remaining -= len(extra_junior)
     result += fulltime_jobs[:remaining]
+    if initiative_jobs:
+        result += initiative_jobs[:1]
 
-    print(f"  Pool: {len(praktikum_jobs)} Praktikum, {len(junior_jobs)} Junior, {len(fulltime_jobs)} Fulltime")
+    print(f"  Pool: {len(praktikum_jobs)} Praktikum, {len(junior_jobs)} Junior, "
+          f"{len(fulltime_jobs)} Fulltime, {len(initiative_jobs)} Initiative")
     return result
 
 
@@ -359,7 +373,7 @@ def build_email_html(jobs: list[dict]) -> str:
         {today} · AI/ML · NLP · Data Science · Munich
       </div>
       <div style="color:#93c5fd;font-size:12px;margin-top:4px;">
-        1 Praktikum + Junior preferred + Fulltime
+        Praktikum + Junior + Fulltime + Initiative
       </div>
     </div>
     <div style="background:#f3f4f6;padding:24px 0;">
