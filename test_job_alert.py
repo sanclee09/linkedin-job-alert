@@ -1,15 +1,11 @@
 """Unit tests for job_alert.py"""
 
-import json
-import tempfile
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pathlib import Path
 from unittest import mock
 
 import pandas as pd
-import pytest
 
 import job_alert
 
@@ -28,18 +24,26 @@ class TestNormalizeTitle:
         assert job_alert._normalize_title("ML Engineer (w/m/d)") == "ml engineer"
 
     def test_strips_all_genders(self):
-        assert job_alert._normalize_title("Data Engineer (all genders)") == "data engineer"
+        assert (
+            job_alert._normalize_title("Data Engineer (all genders)") == "data engineer"
+        )
 
     def test_strips_location_suffix_dash(self):
-        result = job_alert._normalize_title("AI Engineer (m/w/d) - München oder Mobile Office")
+        result = job_alert._normalize_title(
+            "AI Engineer (m/w/d) - München oder Mobile Office"
+        )
         assert result == "ai engineer"
 
     def test_strips_location_suffix_endash(self):
-        result = job_alert._normalize_title("AI Software Engineer – Agentic Systems & RAG (w/m/d)")
+        result = job_alert._normalize_title(
+            "AI Software Engineer – Agentic Systems & RAG (w/m/d)"
+        )
         assert result == "ai software engineer"
 
     def test_preserves_core_title(self):
-        assert job_alert._normalize_title("Founding ML Engineer") == "founding ml engineer"
+        assert (
+            job_alert._normalize_title("Founding ML Engineer") == "founding ml engineer"
+        )
 
     def test_strips_whitespace(self):
         assert job_alert._normalize_title("  AI Engineer  (m/w/d)  ") == "ai engineer"
@@ -48,7 +52,9 @@ class TestNormalizeTitle:
         assert job_alert._normalize_title("") == ""
 
     def test_no_gender_no_location(self):
-        assert job_alert._normalize_title("Datenwissenschaftler") == "datenwissenschaftler"
+        assert (
+            job_alert._normalize_title("Datenwissenschaftler") == "datenwissenschaftler"
+        )
 
     def test_multiple_gender_tags(self):
         result = job_alert._normalize_title("Engineer (m/f/d) (all genders)")
@@ -66,7 +72,10 @@ class TestJobKey:
         assert job_alert._job_key("  AI Engineer ", " BMW ") == "ai engineer@bmw"
 
     def test_lowercases(self):
-        assert job_alert._job_key("Senior ML Engineer", "Celonis") == "senior ml engineer@celonis"
+        assert (
+            job_alert._job_key("Senior ML Engineer", "Celonis")
+            == "senior ml engineer@celonis"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -79,9 +88,8 @@ class TestDecodeHeader:
     def test_encoded_utf8(self):
         # Simulate an encoded header: =?utf-8?b?<base64>?=
         import email.header
-        encoded = email.header.make_header(
-            [(b"M\xc3\xbcnchen", "utf-8")]
-        ).encode()
+
+        encoded = email.header.make_header([(b"M\xc3\xbcnchen", "utf-8")]).encode()
         assert "München" in job_alert._decode_header(encoded)
 
 
@@ -90,7 +98,9 @@ class TestDecodeHeader:
 # ---------------------------------------------------------------------------
 class TestSeenJobs:
     def test_load_empty_when_no_file(self, tmp_path):
-        with mock.patch.object(job_alert, "SEEN_JOBS_FILE", tmp_path / "nonexistent.json"):
+        with mock.patch.object(
+            job_alert, "SEEN_JOBS_FILE", tmp_path / "nonexistent.json"
+        ):
             assert job_alert.load_seen_jobs() == set()
 
     def test_save_and_load_roundtrip(self, tmp_path):
@@ -112,7 +122,9 @@ class TestSeenJobs:
 # ---------------------------------------------------------------------------
 class TestAppliedJobs:
     def test_load_empty_when_no_file(self, tmp_path):
-        with mock.patch.object(job_alert, "APPLIED_JOBS_FILE", tmp_path / "nonexistent.json"):
+        with mock.patch.object(
+            job_alert, "APPLIED_JOBS_FILE", tmp_path / "nonexistent.json"
+        ):
             assert job_alert.load_applied_jobs() == set()
 
     def test_save_and_load_roundtrip(self, tmp_path):
@@ -132,23 +144,45 @@ class TestDetectWorkType:
         assert job_alert.detect_work_type(row) == "Remote"
 
     def test_hybrid_in_location(self):
-        row = pd.Series({"is_remote": False, "location": "Munich (Hybrid)", "description": ""})
+        row = pd.Series(
+            {"is_remote": False, "location": "Munich (Hybrid)", "description": ""}
+        )
         assert job_alert.detect_work_type(row) == "Hybrid"
 
     def test_hybrid_in_description(self):
-        row = pd.Series({"is_remote": False, "location": "Munich", "description": "This is a hybrid role"})
+        row = pd.Series(
+            {
+                "is_remote": False,
+                "location": "Munich",
+                "description": "This is a hybrid role",
+            }
+        )
         assert job_alert.detect_work_type(row) == "Hybrid"
 
     def test_remote_in_location(self):
-        row = pd.Series({"is_remote": False, "location": "Remote / Munich", "description": ""})
+        row = pd.Series(
+            {"is_remote": False, "location": "Remote / Munich", "description": ""}
+        )
         assert job_alert.detect_work_type(row) == "Remote"
 
     def test_remote_in_description(self):
-        row = pd.Series({"is_remote": False, "location": "Munich", "description": "Fully remote position"})
+        row = pd.Series(
+            {
+                "is_remote": False,
+                "location": "Munich",
+                "description": "Fully remote position",
+            }
+        )
         assert job_alert.detect_work_type(row) == "Remote"
 
     def test_onsite_default(self):
-        row = pd.Series({"is_remote": False, "location": "Munich, Germany", "description": "Work in office"})
+        row = pd.Series(
+            {
+                "is_remote": False,
+                "location": "Munich, Germany",
+                "description": "Work in office",
+            }
+        )
         assert job_alert.detect_work_type(row) == "On-site"
 
     def test_missing_fields(self):
@@ -156,7 +190,9 @@ class TestDetectWorkType:
         assert job_alert.detect_work_type(row) == "On-site"
 
     def test_hybrid_takes_priority_over_remote_in_desc(self):
-        row = pd.Series({"is_remote": False, "location": "Hybrid Munich", "description": ""})
+        row = pd.Series(
+            {"is_remote": False, "location": "Hybrid Munich", "description": ""}
+        )
         assert job_alert.detect_work_type(row) == "Hybrid"
 
 
@@ -281,6 +317,7 @@ class TestSendEmail:
         raw_msg = mock_smtp.sendmail.call_args[0][2]
         # Subject is base64-encoded due to emoji, so parse it back
         import email as email_lib
+
         parsed = email_lib.message_from_string(raw_msg)
         subject = str(email_lib.header.decode_header(parsed["Subject"])[0][0], "utf-8")
         assert "7 New Jobs Today" in subject
@@ -303,12 +340,12 @@ class TestFetchAppliedJobsFromGmail:
         msg = MIMEMultipart()
         msg["Subject"] = "Sang Hyeon, your application was sent to TestCo"
         msg["From"] = "LinkedIn <jobs-noreply@linkedin.com>"
-        html_body = '''
+        html_body = """
         <html><body>
         <a href="https://linkedin.com/comm/jobs/view/123"><img src="logo.png"/></a>
         <a href="https://linkedin.com/comm/jobs/view/123">AI Engineer (m/w/d)</a>
         </body></html>
-        '''
+        """
         msg.attach(MIMEText(html_body, "html"))
 
         # First search (LinkedIn) returns one message
@@ -379,12 +416,30 @@ class TestFetchAppliedJobsFromGmail:
 # ---------------------------------------------------------------------------
 class TestScrapeQueries:
     def test_excludes_senior_titles(self):
-        df = pd.DataFrame([
-            {"id": "1", "title": "Senior AI Engineer", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-            {"id": "2", "title": "AI Engineer", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": "1",
+                    "title": "Senior AI Engineer",
+                    "company": "Co",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+                {
+                    "id": "2",
+                    "title": "AI Engineer",
+                    "company": "Co",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+            ]
+        )
         with mock.patch("job_alert.scrape_jobs", return_value=df):
             result = job_alert._scrape_queries(["test"], set())
         titles = [j["title"] for j in result]
@@ -392,12 +447,30 @@ class TestScrapeQueries:
         assert "Senior AI Engineer" not in titles
 
     def test_excludes_working_student(self):
-        df = pd.DataFrame([
-            {"id": "1", "title": "Working Student ML", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-            {"id": "2", "title": "ML Engineer", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": "1",
+                    "title": "Working Student ML",
+                    "company": "Co",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+                {
+                    "id": "2",
+                    "title": "ML Engineer",
+                    "company": "Co",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+            ]
+        )
         with mock.patch("job_alert.scrape_jobs", return_value=df):
             result = job_alert._scrape_queries(["test"], set())
         titles = [j["title"] for j in result]
@@ -405,12 +478,30 @@ class TestScrapeQueries:
         assert "Working Student ML" not in titles
 
     def test_excludes_bi_titles(self):
-        df = pd.DataFrame([
-            {"id": "1", "title": "Business Intelligence Analyst", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-            {"id": "2", "title": "Data Scientist", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": "1",
+                    "title": "Business Intelligence Analyst",
+                    "company": "Co",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+                {
+                    "id": "2",
+                    "title": "Data Scientist",
+                    "company": "Co",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+            ]
+        )
         with mock.patch("job_alert.scrape_jobs", return_value=df):
             result = job_alert._scrape_queries(["test"], set())
         titles = [j["title"] for j in result]
@@ -418,12 +509,30 @@ class TestScrapeQueries:
         assert "Business Intelligence Analyst" not in titles
 
     def test_excludes_blocked_companies(self):
-        df = pd.DataFrame([
-            {"id": "1", "title": "AI Engineer", "company": "BMW Group", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-            {"id": "2", "title": "AI Engineer", "company": "Celonis", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": "1",
+                    "title": "AI Engineer",
+                    "company": "BMW Group",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+                {
+                    "id": "2",
+                    "title": "AI Engineer",
+                    "company": "Celonis",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+            ]
+        )
         with mock.patch("job_alert.scrape_jobs", return_value=df):
             result = job_alert._scrape_queries(["test"], set())
         companies = [j["company"] for j in result]
@@ -431,18 +540,38 @@ class TestScrapeQueries:
         assert "BMW Group" not in companies
 
     def test_deduplicates_by_job_id(self):
-        df = pd.DataFrame([
-            {"id": "same-id", "title": "AI Engineer", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-            {"id": "same-id", "title": "AI Engineer", "company": "Co", "location": "Munich",
-             "is_remote": False, "description": "desc", "job_url": "https://example.com", "date_posted": None},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": "same-id",
+                    "title": "AI Engineer",
+                    "company": "Co",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+                {
+                    "id": "same-id",
+                    "title": "AI Engineer",
+                    "company": "Co",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "desc",
+                    "job_url": "https://example.com",
+                    "date_posted": None,
+                },
+            ]
+        )
         with mock.patch("job_alert.scrape_jobs", return_value=df):
             result = job_alert._scrape_queries(["test"], set())
         assert len(result) == 1
 
     def test_handles_scrape_error(self):
-        with mock.patch("job_alert.scrape_jobs", side_effect=Exception("Network error")):
+        with mock.patch(
+            "job_alert.scrape_jobs", side_effect=Exception("Network error")
+        ):
             result = job_alert._scrape_queries(["test"], set())
         assert result == []
 
@@ -475,30 +604,59 @@ class TestFilterAndSort:
 class TestSearchJobs:
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
     @mock.patch("job_alert.scrape_jobs")
-    def test_returns_1_praktikum_junior_preferred_rest_fulltime(self, mock_scrape, mock_gmail):
+    def test_returns_1_praktikum_junior_preferred_rest_fulltime(
+        self, mock_scrape, mock_gmail
+    ):
         def fake_scrape(**kwargs):
             term = kwargs.get("search_term", "")
             if "Praktikum" in term or "Internship" in term:
-                return pd.DataFrame([
-                    {"id": f"p-{i}-{term[:5]}", "title": f"Praktikum AI {i}", "company": "Co",
-                     "location": "Munich", "is_remote": False, "description": "d",
-                     "job_url": "https://example.com", "date_posted": None}
-                    for i in range(5)
-                ])
+                return pd.DataFrame(
+                    [
+                        {
+                            "id": f"p-{i}-{term[:5]}",
+                            "title": f"Praktikum AI {i}",
+                            "company": "Co",
+                            "location": "Munich",
+                            "is_remote": False,
+                            "description": "d",
+                            "job_url": "https://example.com",
+                            "date_posted": None,
+                        }
+                        for i in range(5)
+                    ]
+                )
             elif "Junior" in term:
-                return pd.DataFrame([
-                    {"id": f"j-{i}-{term[:5]}", "title": f"Junior Data Scientist {i}", "company": "Co",
-                     "location": "Munich", "is_remote": False, "description": "d",
-                     "job_url": "https://example.com", "date_posted": None}
-                    for i in range(3)
-                ])
+                return pd.DataFrame(
+                    [
+                        {
+                            "id": f"j-{i}-{term[:5]}",
+                            "title": f"Junior Data Scientist {i}",
+                            "company": "Co",
+                            "location": "Munich",
+                            "is_remote": False,
+                            "description": "d",
+                            "job_url": "https://example.com",
+                            "date_posted": None,
+                        }
+                        for i in range(3)
+                    ]
+                )
             else:
-                return pd.DataFrame([
-                    {"id": f"f-{i}-{term[:5]}", "title": f"AI Engineer {i}", "company": "Co",
-                     "location": "Munich", "is_remote": False, "description": "d",
-                     "job_url": "https://example.com", "date_posted": None}
-                    for i in range(5)
-                ])
+                return pd.DataFrame(
+                    [
+                        {
+                            "id": f"f-{i}-{term[:5]}",
+                            "title": f"AI Engineer {i}",
+                            "company": "Co",
+                            "location": "Munich",
+                            "is_remote": False,
+                            "description": "d",
+                            "job_url": "https://example.com",
+                            "date_posted": None,
+                        }
+                        for i in range(5)
+                    ]
+                )
 
         mock_scrape.side_effect = fake_scrape
         result = job_alert.search_jobs()
@@ -522,26 +680,53 @@ class TestSearchJobs:
         def fake_scrape(**kwargs):
             term = kwargs.get("search_term", "")
             if "Praktikum" in term or "Internship" in term:
-                return pd.DataFrame([
-                    {"id": f"p-{i}-{term[:5]}", "title": f"Praktikum AI {i}", "company": "Co",
-                     "location": "Munich", "is_remote": False, "description": "d",
-                     "job_url": "https://example.com", "date_posted": None}
-                    for i in range(5)
-                ])
+                return pd.DataFrame(
+                    [
+                        {
+                            "id": f"p-{i}-{term[:5]}",
+                            "title": f"Praktikum AI {i}",
+                            "company": "Co",
+                            "location": "Munich",
+                            "is_remote": False,
+                            "description": "d",
+                            "job_url": "https://example.com",
+                            "date_posted": None,
+                        }
+                        for i in range(5)
+                    ]
+                )
             elif "Junior" in term or "Trainee" in term or "Graduate" in term:
-                return pd.DataFrame([
-                    {"id": f"j-{i}-{term[:5]}", "title": f"Junior DS {i}", "company": "Co",
-                     "location": "Munich", "is_remote": False, "description": "d",
-                     "job_url": "https://example.com", "date_posted": None}
-                    for i in range(5)
-                ])
+                return pd.DataFrame(
+                    [
+                        {
+                            "id": f"j-{i}-{term[:5]}",
+                            "title": f"Junior DS {i}",
+                            "company": "Co",
+                            "location": "Munich",
+                            "is_remote": False,
+                            "description": "d",
+                            "job_url": "https://example.com",
+                            "date_posted": None,
+                        }
+                        for i in range(5)
+                    ]
+                )
             else:
-                return pd.DataFrame([
-                    {"id": f"f-{i}-{term[:5]}", "title": f"AI Engineer {i}", "company": "Co",
-                     "location": "Munich", "is_remote": False, "description": "d",
-                     "job_url": "https://example.com", "date_posted": None}
-                    for i in range(5)
-                ])
+                return pd.DataFrame(
+                    [
+                        {
+                            "id": f"f-{i}-{term[:5]}",
+                            "title": f"AI Engineer {i}",
+                            "company": "Co",
+                            "location": "Munich",
+                            "is_remote": False,
+                            "description": "d",
+                            "job_url": "https://example.com",
+                            "date_posted": None,
+                        }
+                        for i in range(5)
+                    ]
+                )
 
         mock_scrape.side_effect = fake_scrape
         # Mark some jobs as seen
@@ -561,10 +746,20 @@ class TestMain:
     @mock.patch("job_alert.search_jobs")
     @mock.patch("job_alert.save_seen_jobs")
     @mock.patch("job_alert.load_seen_jobs", return_value=set())
-    def test_sends_email_when_new_jobs(self, mock_load, mock_save, mock_search, mock_send):
+    def test_sends_email_when_new_jobs(
+        self, mock_load, mock_save, mock_search, mock_send
+    ):
         mock_search.return_value = [
-            {"job_id": "1", "title": "AI Eng", "company": "Co", "location": "Munich",
-             "work_type": "Remote", "description": "d", "url": "https://example.com", "date_posted": None}
+            {
+                "job_id": "1",
+                "title": "AI Eng",
+                "company": "Co",
+                "location": "Munich",
+                "work_type": "Remote",
+                "description": "d",
+                "url": "https://example.com",
+                "date_posted": None,
+            }
         ]
         with mock.patch.object(job_alert, "GMAIL_APP_PASSWORD", "test"):
             job_alert.main()

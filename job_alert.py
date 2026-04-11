@@ -23,8 +23,8 @@ from jobspy import scrape_jobs
 load_dotenv()
 
 # --- CONFIG ------------------------------------------------------------------
-RECIPIENT_EMAIL    = "sang.h.lee09@gmail.com"
-SENDER_EMAIL       = "sang.h.lee09@gmail.com"
+RECIPIENT_EMAIL = "sang.h.lee09@gmail.com"
+SENDER_EMAIL = "sang.h.lee09@gmail.com"
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 
 SEARCH_QUERIES_FULLTIME = [
@@ -53,23 +53,42 @@ SEARCH_QUERIES_INITIATIVE = [
     "Initiativbewerbung Technologie",
 ]
 SEARCH_SITES = ["linkedin", "indeed", "glassdoor", "google"]
-LOCATION   = "Munich, Germany"
-HOURS_OLD  = 168   # past week
-TOP_N      = 5  # total: 1 Praktikum + 1 Junior + 3 Fulltime
+LOCATION = "Munich, Germany"
+HOURS_OLD = 168  # past week
+TOP_N = 5  # total: 1 Praktikum + 1 Junior + 3 Fulltime
 
 EXCLUDE_COMPANIES = {
     "bmw group",
 }
 
-SEEN_JOBS_FILE = Path(os.environ.get("SEEN_JOBS_FILE", Path.home() / ".linkedin_job_alert_seen.json"))
+SEEN_JOBS_FILE = Path(
+    os.environ.get("SEEN_JOBS_FILE", Path.home() / ".linkedin_job_alert_seen.json")
+)
 
-APPLIED_JOBS_FILE = Path(os.environ.get("APPLIED_JOBS_FILE", Path.home() / ".linkedin_job_alert_applied.json"))
+APPLIED_JOBS_FILE = Path(
+    os.environ.get(
+        "APPLIED_JOBS_FILE", Path.home() / ".linkedin_job_alert_applied.json"
+    )
+)
 
 # Exclude senior+ level positions
 EXCLUDE_TITLE_KEYWORDS = [
-    "senior", "staff", "principal", "lead", "head of", "director", "vp ",
-    "vice president", "manager", "architect", "working student", "werkstudent",
-    "business intelligence", " bi ", "bi developer", "bi analyst",
+    "senior",
+    "staff",
+    "principal",
+    "lead",
+    "head of",
+    "director",
+    "vp ",
+    "vice president",
+    "manager",
+    "architect",
+    "working student",
+    "werkstudent",
+    "business intelligence",
+    " bi ",
+    "bi developer",
+    "bi analyst",
 ]
 # -----------------------------------------------------------------------------
 
@@ -129,15 +148,21 @@ def fetch_applied_jobs_from_gmail() -> set[str]:
         mail.select('"[Gmail]/All Mail"')
 
         # --- 1) LinkedIn application confirmations ---
-        _, data = mail.search(None, 'FROM "jobs-noreply@linkedin.com" SUBJECT "application was sent"')
+        _, data = mail.search(
+            None, 'FROM "jobs-noreply@linkedin.com" SUBJECT "application was sent"'
+        )
         for msg_id in data[0].split():
             _, msg_data = mail.fetch(msg_id, "(RFC822)")
             msg = email_lib.message_from_bytes(msg_data[0][1])
             for part in msg.walk():
                 if part.get_content_type() == "text/html":
-                    html = part.get_payload(decode=True).decode("utf-8", errors="replace")
+                    html = part.get_payload(decode=True).decode(
+                        "utf-8", errors="replace"
+                    )
                     for link_match in re.finditer(
-                        r'<a[^>]*href="[^"]*jobs/view[^"]*"[^>]*>(.*?)</a>', html, re.S,
+                        r'<a[^>]*href="[^"]*jobs/view[^"]*"[^>]*>(.*?)</a>',
+                        html,
+                        re.S,
                     ):
                         text = re.sub(r"<[^>]+>", "", link_match.group(1)).strip()
                         text = text.replace("&amp;", "&")
@@ -148,7 +173,8 @@ def fetch_applied_jobs_from_gmail() -> set[str]:
 
         # --- 2) Direct application confirmations (Bewerbung / application) ---
         _, data2 = mail.search(
-            None, 'OR SUBJECT "Deine Bewerbung als" SUBJECT "Your application for"',
+            None,
+            'OR SUBJECT "Deine Bewerbung als" SUBJECT "Your application for"',
         )
         # Common patterns:
         #   "Deine Bewerbung als AI Engineer (m/w/d) - München oder Mobile Office"
@@ -172,7 +198,9 @@ def fetch_applied_jobs_from_gmail() -> set[str]:
                 if m:
                     title = m.group(1).strip()
                     # Clean trailing company info after common separators
-                    title = re.split(r"\s+bei\s+|\s+at\s+|\s+[-–|]\s+", title)[0].strip()
+                    title = re.split(r"\s+bei\s+|\s+at\s+|\s+[-–|]\s+", title)[
+                        0
+                    ].strip()
                     if title:
                         applied_titles.add(_normalize_title(title))
                     break
@@ -239,16 +267,23 @@ def _scrape_queries(queries: list[str], seen_ids: set[str]) -> list[dict]:
                     continue
 
                 desc = str(row.get("description", ""))
-                jobs.append({
-                    "job_id":      job_id,
-                    "title":       title,
-                    "company":     company,
-                    "location":    str(row.get("location", LOCATION)),
-                    "work_type":   detect_work_type(row),
-                    "description": desc[:300].strip(),
-                    "url":         str(row.get("job_url", f"https://www.linkedin.com/jobs/view/{job_id}/")),
-                    "date_posted": row.get("date_posted"),
-                })
+                jobs.append(
+                    {
+                        "job_id": job_id,
+                        "title": title,
+                        "company": company,
+                        "location": str(row.get("location", LOCATION)),
+                        "work_type": detect_work_type(row),
+                        "description": desc[:300].strip(),
+                        "url": str(
+                            row.get(
+                                "job_url",
+                                f"https://www.linkedin.com/jobs/view/{job_id}/",
+                            )
+                        ),
+                        "date_posted": row.get("date_posted"),
+                    }
+                )
         except Exception as e:
             print(f"  [WARN] Search failed for {query!r}: {e}", file=sys.stderr)
     return jobs
@@ -267,7 +302,9 @@ def _sort_newest(jobs: list[dict]) -> list[dict]:
     """Sort jobs by date_posted descending."""
     return sorted(
         jobs,
-        key=lambda j: j["date_posted"] if isinstance(j["date_posted"], datetime) else datetime.min,
+        key=lambda j: j["date_posted"]
+        if isinstance(j["date_posted"], datetime)
+        else datetime.min,
         reverse=True,
     )
 
@@ -296,15 +333,17 @@ def search_jobs(seen_jobs: set | None = None) -> list[dict]:
     # If initiative available, reserve 1 slot
     if initiative_jobs:
         remaining -= 1
-    extra_junior = junior_jobs[1:1 + remaining]
+    extra_junior = junior_jobs[1 : 1 + remaining]
     result += extra_junior
     remaining -= len(extra_junior)
     result += fulltime_jobs[:remaining]
     if initiative_jobs:
         result += initiative_jobs[:1]
 
-    print(f"  Pool: {len(praktikum_jobs)} Praktikum, {len(junior_jobs)} Junior, "
-          f"{len(fulltime_jobs)} Fulltime, {len(initiative_jobs)} Initiative")
+    print(
+        f"  Pool: {len(praktikum_jobs)} Praktikum, {len(junior_jobs)} Junior, "
+        f"{len(fulltime_jobs)} Fulltime, {len(initiative_jobs)} Initiative"
+    )
     return result
 
 
@@ -312,8 +351,8 @@ def build_email_html(jobs: list[dict]) -> str:
     today = datetime.now().strftime("%B %d, %Y")
 
     work_type_colors = {
-        "Remote":  ("background:#d1fae5;color:#065f46;", "Remote"),
-        "Hybrid":  ("background:#e8f4fd;color:#1a73e8;", "Hybrid"),
+        "Remote": ("background:#d1fae5;color:#065f46;", "Remote"),
+        "Hybrid": ("background:#e8f4fd;color:#1a73e8;", "Hybrid"),
         "On-site": ("background:#fef3c7;color:#92400e;", "On-site"),
     }
 
@@ -322,19 +361,23 @@ def build_email_html(jobs: list[dict]) -> str:
         wt = job.get("work_type", "")
         badge_style, badge_label = work_type_colors.get(wt, ("", ""))
         work_badge = (
-            f'<span style="{badge_style}padding:2px 8px;border-radius:10px;'
-            f'font-size:12px;font-weight:600;">{badge_label}</span>'
-        ) if badge_style else ""
+            (
+                f'<span style="{badge_style}padding:2px 8px;border-radius:10px;'
+                f'font-size:12px;font-weight:600;">{badge_label}</span>'
+            )
+            if badge_style
+            else ""
+        )
 
         desc = job["description"]
         if len(desc) > 220:
             desc = desc[:220] + "…"
 
         # Escape basic HTML chars in user-sourced strings
-        title   = job["title"].replace("&", "&amp;").replace("<", "&lt;")
+        title = job["title"].replace("&", "&amp;").replace("<", "&lt;")
         company = job["company"].replace("&", "&amp;").replace("<", "&lt;")
         location = job["location"].replace("&", "&amp;").replace("<", "&lt;")
-        desc    = desc.replace("&", "&amp;").replace("<", "&lt;")
+        desc = desc.replace("&", "&amp;").replace("<", "&lt;")
 
         cards += f"""
         <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;
@@ -352,7 +395,7 @@ def build_email_html(jobs: list[dict]) -> str:
           <div style="color:#6b7280;font-size:13px;margin:8px 0 12px 32px;line-height:1.5;">
             {desc}
           </div>
-          <a href="{job['url']}"
+          <a href="{job["url"]}"
              style="display:inline-block;margin-left:32px;padding:8px 18px;
                     background:#0a66c2;color:#fff;border-radius:8px;
                     text-decoration:none;font-size:13px;font-weight:600;">
@@ -392,9 +435,11 @@ def build_email_html(jobs: list[dict]) -> str:
 
 def send_email(html: str, job_count: int):
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🎯 {job_count} New Jobs Today – AI/ML Munich ({datetime.now().strftime('%b %d')})"
-    msg["From"]    = SENDER_EMAIL
-    msg["To"]      = RECIPIENT_EMAIL
+    msg["Subject"] = (
+        f"🎯 {job_count} New Jobs Today – AI/ML Munich ({datetime.now().strftime('%b %d')})"
+    )
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = RECIPIENT_EMAIL
     msg.attach(MIMEText(html, "html"))
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
