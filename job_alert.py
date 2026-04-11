@@ -266,6 +266,13 @@ def _scrape_queries(queries: list[str], seen_ids: set[str]) -> list[dict]:
                 if company.strip().lower() in EXCLUDE_COMPANIES:
                     continue
 
+                # Skip posts without a date (likely expired or stale)
+                date_posted = row.get("date_posted")
+                if date_posted is None or (
+                    isinstance(date_posted, float) and pd.isna(date_posted)
+                ):
+                    continue
+
                 desc = str(row.get("description", ""))
                 jobs.append(
                     {
@@ -281,7 +288,7 @@ def _scrape_queries(queries: list[str], seen_ids: set[str]) -> list[dict]:
                                 f"https://www.linkedin.com/jobs/view/{job_id}/",
                             )
                         ),
-                        "date_posted": row.get("date_posted"),
+                        "date_posted": date_posted,
                     }
                 )
         except Exception as e:

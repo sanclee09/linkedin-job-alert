@@ -426,7 +426,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
                 {
                     "id": "2",
@@ -436,7 +436,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
             ]
         )
@@ -457,7 +457,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
                 {
                     "id": "2",
@@ -467,7 +467,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
             ]
         )
@@ -488,7 +488,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
                 {
                     "id": "2",
@@ -498,7 +498,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
             ]
         )
@@ -519,7 +519,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
                 {
                     "id": "2",
@@ -529,7 +529,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
             ]
         )
@@ -550,7 +550,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
                 {
                     "id": "same-id",
@@ -560,7 +560,7 @@ class TestScrapeQueries:
                     "is_remote": False,
                     "description": "desc",
                     "job_url": "https://example.com",
-                    "date_posted": None,
+                    "date_posted": datetime(2026, 4, 10),
                 },
             ]
         )
@@ -620,7 +620,7 @@ class TestSearchJobs:
                             "is_remote": False,
                             "description": "d",
                             "job_url": "https://example.com",
-                            "date_posted": None,
+                            "date_posted": datetime(2026, 4, 10),
                         }
                         for i in range(5)
                     ]
@@ -636,7 +636,7 @@ class TestSearchJobs:
                             "is_remote": False,
                             "description": "d",
                             "job_url": "https://example.com",
-                            "date_posted": None,
+                            "date_posted": datetime(2026, 4, 10),
                         }
                         for i in range(3)
                     ]
@@ -652,7 +652,7 @@ class TestSearchJobs:
                             "is_remote": False,
                             "description": "d",
                             "job_url": "https://example.com",
-                            "date_posted": None,
+                            "date_posted": datetime(2026, 4, 10),
                         }
                         for i in range(5)
                     ]
@@ -690,7 +690,7 @@ class TestSearchJobs:
                             "is_remote": False,
                             "description": "d",
                             "job_url": "https://example.com",
-                            "date_posted": None,
+                            "date_posted": datetime(2026, 4, 10),
                         }
                         for i in range(5)
                     ]
@@ -706,7 +706,7 @@ class TestSearchJobs:
                             "is_remote": False,
                             "description": "d",
                             "job_url": "https://example.com",
-                            "date_posted": None,
+                            "date_posted": datetime(2026, 4, 10),
                         }
                         for i in range(5)
                     ]
@@ -722,7 +722,7 @@ class TestSearchJobs:
                             "is_remote": False,
                             "description": "d",
                             "job_url": "https://example.com",
-                            "date_posted": None,
+                            "date_posted": datetime(2026, 4, 10),
                         }
                         for i in range(5)
                     ]
@@ -758,7 +758,7 @@ class TestMain:
                 "work_type": "Remote",
                 "description": "d",
                 "url": "https://example.com",
-                "date_posted": None,
+                "date_posted": datetime(2026, 4, 10),
             }
         ]
         with mock.patch.object(job_alert, "GMAIL_APP_PASSWORD", "test"):
