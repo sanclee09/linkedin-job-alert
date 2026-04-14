@@ -71,9 +71,10 @@ APPLIED_JOBS_FILE = Path(
     )
 )
 
-# Exclude senior+ level positions
+# Exclude senior+ level positions and irrelevant roles
 EXCLUDE_TITLE_KEYWORDS = [
     "senior",
+    "sr.",
     "staff",
     "principal",
     "lead",
@@ -84,11 +85,49 @@ EXCLUDE_TITLE_KEYWORDS = [
     "manager",
     "architect",
     "working student",
+    "work student",
     "werkstudent",
     "business intelligence",
     " bi ",
     "bi developer",
     "bi analyst",
+    "freelance",
+    "defence",
+    "defense",
+]
+
+# Keywords indicating intern-level positions (used for cross-category filtering)
+INTERN_TITLE_KEYWORDS = [
+    "praktikum",
+    "internship",
+    "intern ",
+    "intern,",
+    "(intern)",
+]
+
+# Relevance keywords – at least one must appear in title (not description)
+RELEVANCE_TITLE_KEYWORDS = [
+    "data",
+    " ai ",
+    "ai ",
+    " ai",
+    "ml ",
+    " ml",
+    "machine learning",
+    "deep learning",
+    "nlp",
+    "llm",
+    "artificial intelligence",
+    "analytics",
+    "scientist",
+    "python",
+    "rag",
+    "genai",
+    "ki ",
+    "künstliche intelligenz",
+    "quant",
+    "etl",
+    "initiativbewerbung",
 ]
 # -----------------------------------------------------------------------------
 
@@ -108,7 +147,19 @@ def _normalize_title(title: str) -> str:
 
 def _job_key(title: str, company: str) -> str:
     """Normalize title+company into a comparable key."""
-    return f"{title.strip().lower()}@{company.strip().lower()}"
+    return f"{_normalize_title(title)}@{company.strip().lower()}"
+
+
+def _is_intern_title(title: str) -> bool:
+    """Check if a job title indicates an intern/Praktikum position."""
+    t = title.lower()
+    return any(kw in t for kw in INTERN_TITLE_KEYWORDS)
+
+
+def _is_relevant(title: str, description: str) -> bool:
+    """Check if a job title is relevant to AI/ML/Data fields."""
+    t = f" {title.lower()} "
+    return any(kw in t for kw in RELEVANCE_TITLE_KEYWORDS)
 
 
 def load_applied_jobs() -> set:
@@ -237,7 +288,9 @@ def detect_work_type(row: pd.Series) -> str:
     return "On-site"
 
 
-def _scrape_queries(queries: list[str], seen_ids: set[str]) -> list[dict]:
+def _scrape_queries(
+    queries: list[str], seen_ids: set[str], seen_keys: set[str]
+) -> list[dict]:
     """Run scrape_jobs for each query and return deduplicated, filtered results."""
     jobs: list[dict] = []
     for query in queries:
@@ -274,6 +327,17 @@ def _scrape_queries(queries: list[str], seen_ids: set[str]) -> list[dict]:
                     continue
 
                 desc = str(row.get("description", ""))
+
+                # Skip jobs not relevant to AI/ML/Data fields
+                if not _is_relevant(title, desc):
+                    continue
+
+                # Dedup by title+company across runs
+                key = _job_key(title, company)
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+
                 jobs.append(
                     {
                         "job_id": job_id,
@@ -318,12 +382,13 @@ def _sort_newest(jobs: list[dict]) -> list[dict]:
 
 def search_jobs(seen_jobs: set | None = None) -> list[dict]:
     seen_ids: set[str] = set()
+    seen_keys: set[str] = set()
     if seen_jobs is None:
         seen_jobs = set()
     applied_titles = fetch_applied_jobs_from_gmail()
 
     def _prepare(queries):
-        jobs = _scrape_queries(queries, seen_ids)
+        jobs = _scrape_queries(queries, seen_ids, seen_keys)
         jobs = _filter_applied(jobs, applied_titles)
         jobs = [j for j in jobs if j["job_id"] not in seen_jobs]
         return _sort_newest(jobs)
@@ -332,6 +397,10 @@ def search_jobs(seen_jobs: set | None = None) -> list[dict]:
     junior_jobs = _prepare(SEARCH_QUERIES_JUNIOR)
     fulltime_jobs = _prepare(SEARCH_QUERIES_FULLTIME)
     initiative_jobs = _prepare(SEARCH_QUERIES_INITIATIVE)
+
+    # Cross-category enforcement: remove intern titles from non-intern pools
+    junior_jobs = [j for j in junior_jobs if not _is_intern_title(j["title"])]
+    fulltime_jobs = [j for j in fulltime_jobs if not _is_intern_title(j["title"])]
 
     # Compose: 1 Praktikum + 1+ Junior (preferred) + rest Fulltime + 1 Initiative (bonus)
     result = praktikum_jobs[:1]
@@ -346,6 +415,29 @@ def search_jobs(seen_jobs: set | None = None) -> list[dict]:
     result += fulltime_jobs[:remaining]
     if initiative_jobs:
         result += initiative_jobs[:1]
+
+    # Limit to 1 job per company for diversity
+    seen_companies: set[str] = set()
+    diverse_result: list[dict] = []
+    overflow: list[dict] = []
+    for job in result:
+        co = job["company"].strip().lower()
+        if co not in seen_companies:
+            seen_companies.add(co)
+            diverse_result.append(job)
+        else:
+            overflow.append(job)
+    # Fill gaps from the same category pools
+    if len(diverse_result) < 5:
+        all_extras = junior_jobs + fulltime_jobs
+        for job in all_extras:
+            if len(diverse_result) >= 5:
+                break
+            co = job["company"].strip().lower()
+            if co not in seen_companies and job not in result:
+                seen_companies.add(co)
+                diverse_result.append(job)
+    result = diverse_result
 
     print(
         f"  Pool: {len(praktikum_jobs)} Praktikum, {len(junior_jobs)} Junior, "
