@@ -35,11 +35,6 @@ SEARCH_QUERIES_FULLTIME = [
     "AI Consultant GenAI",
     "Quant Data Scientist",
 ]
-SEARCH_QUERIES_PRAKTIKUM = [
-    "Praktikum Data Science AI",
-    "Internship Machine Learning",
-    "Praktikum KI NLP",
-]
 SEARCH_QUERIES_JUNIOR = [
     "Junior Data Scientist",
     "Junior AI Engineer",
@@ -52,10 +47,13 @@ SEARCH_QUERIES_INITIATIVE = [
     "Initiativbewerbung IT",
     "Initiativbewerbung Technologie",
 ]
-SEARCH_SITES = ["linkedin", "indeed", "glassdoor", "google"]
+SEARCH_SITES = ["linkedin"]
 LOCATION = "Munich, Germany"
 HOURS_OLD = 168  # past week
-TOP_N = 5  # total: 1 Praktikum + 1 Junior + 3 Fulltime
+TOP_N = 5  # total: 1+ Junior + Fulltime + 1 Initiative
+
+# Only keep jobs physically located in Munich
+MUNICH_LOCATION_KEYWORDS = ["munich", "münchen", "muenchen"]
 
 EXCLUDE_COMPANIES = {
     "bmw group",
@@ -160,6 +158,12 @@ def _is_relevant(title: str, description: str) -> bool:
     """Check if a job title is relevant to AI/ML/Data fields."""
     t = f" {title.lower()} "
     return any(kw in t for kw in RELEVANCE_TITLE_KEYWORDS)
+
+
+def _is_in_munich(location: str) -> bool:
+    """Check if a job location is in Munich."""
+    loc = location.lower()
+    return any(kw in loc for kw in MUNICH_LOCATION_KEYWORDS)
 
 
 def load_applied_jobs() -> set:
@@ -300,7 +304,6 @@ def _scrape_queries(
                 site_name=SEARCH_SITES,
                 search_term=query,
                 location=LOCATION,
-                country_indeed="germany",
                 results_wanted=15,
                 hours_old=HOURS_OLD,
                 linkedin_fetch_description=True,
@@ -315,8 +318,17 @@ def _scrape_queries(
                 if any(kw in title.lower() for kw in EXCLUDE_TITLE_KEYWORDS):
                     continue
 
+                # Skip internship / Praktikum positions
+                if _is_intern_title(title):
+                    continue
+
                 company = str(row.get("company", "Unknown Company"))
                 if company.strip().lower() in EXCLUDE_COMPANIES:
+                    continue
+
+                # Keep only jobs located in Munich
+                location = str(row.get("location", LOCATION))
+                if not _is_in_munich(location):
                     continue
 
                 # Skip posts without a date (likely expired or stale)
@@ -343,7 +355,7 @@ def _scrape_queries(
                         "job_id": job_id,
                         "title": title,
                         "company": company,
-                        "location": str(row.get("location", LOCATION)),
+                        "location": location,
                         "work_type": detect_work_type(row),
                         "description": desc[:300].strip(),
                         "url": str(
@@ -393,18 +405,12 @@ def search_jobs(seen_jobs: set | None = None) -> list[dict]:
         jobs = [j for j in jobs if j["job_id"] not in seen_jobs]
         return _sort_newest(jobs)
 
-    praktikum_jobs = _prepare(SEARCH_QUERIES_PRAKTIKUM)
     junior_jobs = _prepare(SEARCH_QUERIES_JUNIOR)
     fulltime_jobs = _prepare(SEARCH_QUERIES_FULLTIME)
     initiative_jobs = _prepare(SEARCH_QUERIES_INITIATIVE)
 
-    # Cross-category enforcement: remove intern titles from non-intern pools
-    junior_jobs = [j for j in junior_jobs if not _is_intern_title(j["title"])]
-    fulltime_jobs = [j for j in fulltime_jobs if not _is_intern_title(j["title"])]
-
-    # Compose: 1 Praktikum + 1+ Junior (preferred) + rest Fulltime + 1 Initiative (bonus)
-    result = praktikum_jobs[:1]
-    result += junior_jobs[:1]
+    # Compose: 1+ Junior (preferred) + rest Fulltime + 1 Initiative (bonus)
+    result = junior_jobs[:1]
     remaining = 5 - len(result)
     # If initiative available, reserve 1 slot
     if initiative_jobs:
@@ -440,7 +446,7 @@ def search_jobs(seen_jobs: set | None = None) -> list[dict]:
     result = diverse_result
 
     print(
-        f"  Pool: {len(praktikum_jobs)} Praktikum, {len(junior_jobs)} Junior, "
+        f"  Pool: {len(junior_jobs)} Junior, "
         f"{len(fulltime_jobs)} Fulltime, {len(initiative_jobs)} Initiative"
     )
     return result
@@ -515,7 +521,7 @@ def build_email_html(jobs: list[dict]) -> str:
         {today} · AI/ML · NLP · Data Science · Munich
       </div>
       <div style="color:#93c5fd;font-size:12px;margin-top:4px;">
-        Praktikum + Junior + Fulltime + Initiative
+        Junior + Fulltime + Initiative
       </div>
     </div>
     <div style="background:#f3f4f6;padding:24px 0;">

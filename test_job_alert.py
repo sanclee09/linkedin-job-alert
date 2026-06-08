@@ -663,25 +663,10 @@ class TestHelpers:
 class TestCrossCategoryEnforcement:
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
     @mock.patch("job_alert.scrape_jobs")
-    def test_intern_titles_removed_from_junior_pool(self, mock_scrape, mock_gmail):
+    def test_intern_titles_fully_excluded(self, mock_scrape, mock_gmail):
         def fake_scrape(**kwargs):
             term = kwargs.get("search_term", "")
-            if "Praktikum" in term or "Internship" in term:
-                return pd.DataFrame(
-                    [
-                        {
-                            "id": "p-1",
-                            "title": "Praktikum AI",
-                            "company": "Co",
-                            "location": "Munich",
-                            "is_remote": False,
-                            "description": "AI intern",
-                            "job_url": "https://example.com",
-                            "date_posted": datetime(2026, 4, 10),
-                        }
-                    ]
-                )
-            elif "Junior" in term or "Trainee" in term or "Graduate" in term:
+            if "Junior" in term or "Trainee" in term or "Graduate" in term:
                 return pd.DataFrame(
                     [
                         {
@@ -732,7 +717,7 @@ class TestCrossCategoryEnforcement:
         intern_count = sum(
             1 for t in titles if "praktikum" in t.lower() or "internship" in t.lower()
         )
-        assert intern_count == 1, f"Expected 1 intern, got {intern_count}: {titles}"
+        assert intern_count == 0, f"Expected 0 interns, got {intern_count}: {titles}"
 
 
 # ---------------------------------------------------------------------------
@@ -763,28 +748,10 @@ class TestFilterAndSort:
 class TestSearchJobs:
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
     @mock.patch("job_alert.scrape_jobs")
-    def test_returns_1_praktikum_junior_preferred_rest_fulltime(
-        self, mock_scrape, mock_gmail
-    ):
+    def test_returns_junior_preferred_rest_fulltime(self, mock_scrape, mock_gmail):
         def fake_scrape(**kwargs):
             term = kwargs.get("search_term", "")
-            if "Praktikum" in term or "Internship" in term:
-                return pd.DataFrame(
-                    [
-                        {
-                            "id": f"p-{i}-{term[:5]}",
-                            "title": f"Praktikum AI {i}",
-                            "company": f"PraktCo{i}",
-                            "location": "Munich",
-                            "is_remote": False,
-                            "description": "d",
-                            "job_url": "https://example.com",
-                            "date_posted": datetime(2026, 4, 10),
-                        }
-                        for i in range(5)
-                    ]
-                )
-            elif "Junior" in term:
+            if "Junior" in term:
                 return pd.DataFrame(
                     [
                         {
@@ -821,11 +788,15 @@ class TestSearchJobs:
         result = job_alert.search_jobs()
 
         assert len(result) == 5
-        # First should be Praktikum
-        assert "Praktikum" in result[0]["title"]
-        # At least 1 Junior
+        # No interns should appear
+        assert not any(
+            "praktikum" in j["title"].lower() or "internship" in j["title"].lower()
+            for j in result
+        )
+        # At least 1 Junior, and the first slot is a Junior (preferred)
         junior_count = sum(1 for j in result if "Junior" in j["title"])
         assert junior_count >= 1
+        assert "Junior" in result[0]["title"]
 
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
     @mock.patch("job_alert.scrape_jobs", return_value=pd.DataFrame())
@@ -838,28 +809,12 @@ class TestSearchJobs:
     def test_excludes_seen_jobs_before_composing(self, mock_scrape, mock_gmail):
         def fake_scrape(**kwargs):
             term = kwargs.get("search_term", "")
-            if "Praktikum" in term or "Internship" in term:
-                return pd.DataFrame(
-                    [
-                        {
-                            "id": f"p-{i}-{term[:5]}",
-                            "title": f"Praktikum AI {i}",
-                            "company": f"PraktCo{i}",
-                            "location": "Munich",
-                            "is_remote": False,
-                            "description": "d",
-                            "job_url": "https://example.com",
-                            "date_posted": datetime(2026, 4, 10),
-                        }
-                        for i in range(5)
-                    ]
-                )
-            elif "Junior" in term or "Trainee" in term or "Graduate" in term:
+            if "Junior" in term or "Trainee" in term or "Graduate" in term:
                 return pd.DataFrame(
                     [
                         {
                             "id": f"j-{i}-{term[:5]}",
-                            "title": f"Junior DS {i}",
+                            "title": f"Junior Data Scientist {i}",
                             "company": f"JuniorCo{i}",
                             "location": "Munich",
                             "is_remote": False,
@@ -889,7 +844,7 @@ class TestSearchJobs:
 
         mock_scrape.side_effect = fake_scrape
         # Mark some jobs as seen
-        seen = {"p-0-Prakt", "j-0-Junio", "f-0-AI En"}
+        seen = {"j-0-Junio", "f-0-AI En"}
         result = job_alert.search_jobs(seen_jobs=seen)
         # Should still get 5 results, pulling from deeper in each pool
         assert len(result) == 5
