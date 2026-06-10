@@ -849,6 +849,48 @@ class TestSearchJobs:
         assert "Junior" in result[0]["title"]
 
     @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
+    @mock.patch("job_alert.scrape_jobs")
+    def test_caps_jobs_per_company(self, mock_scrape, mock_gmail):
+        def fake_scrape(**kwargs):
+            term = kwargs.get("search_term", "")
+            if "Junior" in term or "Trainee" in term or "Graduate" in term:
+                return pd.DataFrame()
+            if "Initiativ" in term:
+                return pd.DataFrame()
+            rows = [
+                {
+                    "id": f"same-{i}",
+                    "title": f"AI Engineer {i}",
+                    "company": "SameCo",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "d",
+                    "job_url": "https://example.com",
+                    "date_posted": datetime(2026, 4, 10),
+                }
+                for i in range(4)
+            ]
+            rows += [
+                {
+                    "id": f"other-{i}",
+                    "title": f"Data Scientist {i}",
+                    "company": f"OtherCo{i}",
+                    "location": "Munich",
+                    "is_remote": False,
+                    "description": "d",
+                    "job_url": "https://example.com",
+                    "date_posted": datetime(2026, 4, 10),
+                }
+                for i in range(2)
+            ]
+            return pd.DataFrame(rows)
+
+        mock_scrape.side_effect = fake_scrape
+        result = job_alert.search_jobs()
+        same_count = sum(1 for j in result if j["company"] == "SameCo")
+        assert same_count == job_alert.MAX_PER_COMPANY  # capped, not all 4
+
+    @mock.patch("job_alert.fetch_applied_jobs_from_gmail", return_value=set())
     @mock.patch("job_alert.scrape_jobs", return_value=pd.DataFrame())
     def test_handles_empty_results(self, mock_scrape, mock_gmail):
         result = job_alert.search_jobs()

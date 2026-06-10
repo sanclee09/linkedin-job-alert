@@ -49,8 +49,9 @@ SEARCH_QUERIES_INITIATIVE = [
 ]
 SEARCH_SITES = ["linkedin"]
 LOCATION = "Munich, Germany"
-HOURS_OLD = 168  # past week
+HOURS_OLD = 720  # past month (168 = past week)
 TOP_N = 5  # total: 1+ Junior + Fulltime + 1 Initiative
+MAX_PER_COMPANY = 2  # diversity cap: at most N jobs from the same company
 
 # Only keep jobs physically located in Munich
 MUNICH_LOCATION_KEYWORDS = ["munich", "münchen", "muenchen"]
@@ -569,26 +570,24 @@ def search_jobs(seen_jobs: set | None = None) -> list[dict]:
     if initiative_jobs:
         result += initiative_jobs[:1]
 
-    # Limit to 1 job per company for diversity
-    seen_companies: set[str] = set()
+    # Cap jobs per company for diversity (at most MAX_PER_COMPANY each)
+    company_counts: dict[str, int] = {}
     diverse_result: list[dict] = []
-    overflow: list[dict] = []
     for job in result:
         co = job["company"].strip().lower()
-        if co not in seen_companies:
-            seen_companies.add(co)
+        if company_counts.get(co, 0) < MAX_PER_COMPANY:
+            company_counts[co] = company_counts.get(co, 0) + 1
             diverse_result.append(job)
-        else:
-            overflow.append(job)
-    # Fill gaps from the same category pools
+    # Fill gaps from the same category pools, honoring the per-company cap
     if len(diverse_result) < 5:
-        all_extras = junior_jobs + fulltime_jobs
-        for job in all_extras:
+        for job in junior_jobs + fulltime_jobs:
             if len(diverse_result) >= 5:
                 break
+            if job in diverse_result:
+                continue
             co = job["company"].strip().lower()
-            if co not in seen_companies and job not in result:
-                seen_companies.add(co)
+            if company_counts.get(co, 0) < MAX_PER_COMPANY:
+                company_counts[co] = company_counts.get(co, 0) + 1
                 diverse_result.append(job)
     result = diverse_result
 
