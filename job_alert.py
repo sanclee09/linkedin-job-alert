@@ -94,13 +94,22 @@ EXCLUDE_TITLE_KEYWORDS = [
     "defense",
 ]
 
-# Keywords indicating intern-level positions (used for cross-category filtering)
+# Keywords indicating intern / working-student / thesis positions (not real jobs).
+# Note: German "Praktikant(in)" = the intern person, distinct from "Praktikum".
 INTERN_TITLE_KEYWORDS = [
     "praktikum",
+    "praktikant",  # catches Praktikant, Praktikantin, Praktikanten
+    "praktika",
     "internship",
     "intern ",
     "intern,",
     "(intern)",
+    "working student",
+    "werkstudent",
+    "abschlussarbeit",  # thesis
+    "bachelorarbeit",
+    "masterarbeit",
+    "thesis",
 ]
 
 # Relevance keywords – at least one must appear in title (not description)

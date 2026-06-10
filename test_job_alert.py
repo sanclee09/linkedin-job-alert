@@ -643,6 +643,13 @@ class TestHelpers:
     def test_is_intern_title(self):
         assert job_alert._is_intern_title("Praktikum AI Engineering") is True
         assert job_alert._is_intern_title("ClimateTech Internship") is True
+        # German "Praktikant(in)" — the intern person, distinct from "Praktikum"
+        assert job_alert._is_intern_title("Praktikant Data Analytics (m/w/d)") is True
+        assert job_alert._is_intern_title("Praktikantin Machine Learning") is True
+        # Thesis / working-student positions are not real jobs either
+        assert job_alert._is_intern_title("Abschlussarbeit Machine Learning") is True
+        assert job_alert._is_intern_title("Masterarbeit Data Science") is True
+        assert job_alert._is_intern_title("Working Student AI") is True
         assert job_alert._is_intern_title("Junior Data Scientist") is False
         assert job_alert._is_intern_title("AI Engineer") is False
 
