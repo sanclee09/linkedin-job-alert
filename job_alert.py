@@ -136,6 +136,123 @@ RELEVANCE_TITLE_KEYWORDS = [
     "etl",
     "initiativbewerbung",
 ]
+
+# Foreign-market detection: LinkedIn sometimes mislabels a non-German job (e.g. a
+# Paris posting written in French) as "Munich". We detect the description's
+# dominant language via stopword frequency and drop jobs that are clearly written
+# in a language other than German or English.
+FOREIGN_TITLE_MARKERS = ["(f/h)", "(h/f)", "(f/m/x)"]  # French/foreign gender tags
+_LANG_STOPWORDS = {
+    "de": {
+        "und",
+        "der",
+        "die",
+        "das",
+        "wir",
+        "für",
+        "mit",
+        "eine",
+        "ist",
+        "von",
+        "im",
+        "zu",
+        "den",
+        "auf",
+        "du",
+        "deine",
+        "bei",
+        "als",
+        "sowie",
+    },
+    "en": {
+        "the",
+        "and",
+        "you",
+        "we",
+        "for",
+        "with",
+        "your",
+        "are",
+        "our",
+        "will",
+        "to",
+        "of",
+        "in",
+        "as",
+        "is",
+        "on",
+    },
+    "fr": {
+        "le",
+        "la",
+        "les",
+        "des",
+        "vous",
+        "nous",
+        "et",
+        "pour",
+        "avec",
+        "dans",
+        "une",
+        "du",
+        "au",
+        "votre",
+        "poste",
+        "entreprise",
+        "sur",
+        "est",
+        "qui",
+    },
+    "es": {
+        "el",
+        "los",
+        "las",
+        "de",
+        "para",
+        "con",
+        "una",
+        "del",
+        "su",
+        "nuestro",
+        "puesto",
+        "empresa",
+        "que",
+        "por",
+        "en",
+    },
+    "it": {
+        "il",
+        "le",
+        "di",
+        "per",
+        "con",
+        "una",
+        "del",
+        "tuo",
+        "nostra",
+        "azienda",
+        "posizione",
+        "che",
+        "non",
+        "sono",
+    },
+    "nl": {
+        "het",
+        "van",
+        "voor",
+        "met",
+        "een",
+        "je",
+        "wij",
+        "onze",
+        "bij",
+        "naar",
+        "ook",
+        "wordt",
+    },
+}
+MIN_WORDS_FOR_LANG = 20  # need enough text to judge language reliably
+MIN_FOREIGN_STOPWORDS = 5  # foreign markers required to flag as non-DE/EN
 # -----------------------------------------------------------------------------
 
 
@@ -173,6 +290,29 @@ def _is_in_munich(location: str) -> bool:
     """Check if a job location is in Munich."""
     loc = location.lower()
     return any(kw in loc for kw in MUNICH_LOCATION_KEYWORDS)
+
+
+def _is_foreign(title: str, description: str) -> bool:
+    """Detect postings written for a non-German/English market.
+
+    LinkedIn occasionally mislabels a foreign job (e.g. a Paris posting in French)
+    as Munich. We flag it when the title carries a foreign gender tag, or when the
+    description's dominant language is clearly neither German nor English.
+    """
+    if any(m in title.lower() for m in FOREIGN_TITLE_MARKERS):
+        return True
+
+    words = re.findall(r"[a-zàâäéèêëïîôöùûüçñ']+", description.lower())
+    if len(words) < MIN_WORDS_FOR_LANG:
+        return False  # too little text to judge reliably
+
+    counts = {
+        lang: sum(1 for w in words if w in stopwords)
+        for lang, stopwords in _LANG_STOPWORDS.items()
+    }
+    de_en = max(counts["de"], counts["en"])
+    foreign = max(counts["fr"], counts["es"], counts["it"], counts["nl"])
+    return foreign >= MIN_FOREIGN_STOPWORDS and foreign > de_en
 
 
 def load_applied_jobs() -> set:
@@ -353,6 +493,10 @@ def _scrape_queries(
                 if not _is_relevant(title, desc):
                     continue
 
+                # Skip foreign-market postings mislabeled as Munich (e.g. Paris/FR)
+                if _is_foreign(title, desc):
+                    continue
+
                 # Dedup by title+company across runs
                 key = _job_key(title, company)
                 if key in seen_keys:
@@ -394,9 +538,9 @@ def _sort_newest(jobs: list[dict]) -> list[dict]:
     """Sort jobs by date_posted descending."""
     return sorted(
         jobs,
-        key=lambda j: j["date_posted"]
-        if isinstance(j["date_posted"], datetime)
-        else datetime.min,
+        key=lambda j: (
+            j["date_posted"] if isinstance(j["date_posted"], datetime) else datetime.min
+        ),
         reverse=True,
     )
 

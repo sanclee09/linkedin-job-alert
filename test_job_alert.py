@@ -653,6 +653,41 @@ class TestHelpers:
         assert job_alert._is_intern_title("Junior Data Scientist") is False
         assert job_alert._is_intern_title("AI Engineer") is False
 
+    def test_is_foreign_french_description(self):
+        desc = (
+            "Paris - CDI. Tirer le meilleur parti de l'analyse de données et "
+            "accompagner les clients dans leur stratégie. Nous recherchons un "
+            "consultant pour le poste avec une entreprise dans le secteur de la "
+            "technologie qui est en pleine croissance sur le marché."
+        )
+        assert job_alert._is_foreign("Consultant Data", desc) is True
+
+    def test_is_foreign_french_title_marker(self):
+        assert job_alert._is_foreign("Consultant Data (F/H)", "") is True
+        assert job_alert._is_foreign("Ingénieur Data (H/F)", "") is True
+
+    def test_is_foreign_german_description_kept(self):
+        desc = (
+            "Wir suchen einen Data Scientist für unser Team in München. Du "
+            "arbeitest mit modernen Technologien und entwickelst Machine Learning "
+            "Modelle für unsere Kunden. Eine spannende Aufgabe mit viel "
+            "Verantwortung und Gestaltungsspielraum im Bereich KI."
+        )
+        assert job_alert._is_foreign("Data Scientist", desc) is False
+
+    def test_is_foreign_english_description_kept(self):
+        desc = (
+            "We are looking for a Data Scientist to join our team in Munich. You "
+            "will work with modern technologies and build machine learning models "
+            "for our clients. An exciting role with a lot of responsibility in the "
+            "field of AI and data engineering."
+        )
+        assert job_alert._is_foreign("Data Scientist", desc) is False
+
+    def test_is_foreign_short_text_not_flagged(self):
+        # Too little text to judge → not flagged
+        assert job_alert._is_foreign("Data Scientist", "Build RAG pipelines") is False
+
     def test_is_relevant(self):
         assert job_alert._is_relevant("AI Engineer", "") is True
         assert job_alert._is_relevant("Data Scientist", "") is True
