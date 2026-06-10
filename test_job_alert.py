@@ -643,6 +643,9 @@ class TestHelpers:
     def test_is_intern_title(self):
         assert job_alert._is_intern_title("Praktikum AI Engineering") is True
         assert job_alert._is_intern_title("ClimateTech Internship") is True
+        # "Intern" as the last word must be caught (regression: trailing-space bug)
+        assert job_alert._is_intern_title("AI Engineering Intern") is True
+        assert job_alert._is_intern_title("Data Science Intern") is True
         # German "Praktikant(in)" — the intern person, distinct from "Praktikum"
         assert job_alert._is_intern_title("Praktikant Data Analytics (m/w/d)") is True
         assert job_alert._is_intern_title("Praktikantin Machine Learning") is True
@@ -650,7 +653,12 @@ class TestHelpers:
         assert job_alert._is_intern_title("Abschlussarbeit Machine Learning") is True
         assert job_alert._is_intern_title("Masterarbeit Data Science") is True
         assert job_alert._is_intern_title("Working Student AI") is True
+        assert job_alert._is_intern_title("Werkstudent Data") is True
+        # Must NOT false-positive on words that merely contain "intern"
+        assert job_alert._is_intern_title("International Data Analyst") is False
+        assert job_alert._is_intern_title("Internal Tools Engineer") is False
         assert job_alert._is_intern_title("Junior Data Scientist") is False
+        assert job_alert._is_intern_title("Trainee Data Science") is False
         assert job_alert._is_intern_title("AI Engineer") is False
 
     def test_is_foreign_french_description(self):

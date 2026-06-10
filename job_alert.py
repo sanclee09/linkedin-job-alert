@@ -94,23 +94,18 @@ EXCLUDE_TITLE_KEYWORDS = [
     "defense",
 ]
 
-# Keywords indicating intern / working-student / thesis positions (not real jobs).
-# Note: German "Praktikant(in)" = the intern person, distinct from "Praktikum".
-INTERN_TITLE_KEYWORDS = [
-    "praktikum",
-    "praktikant",  # catches Praktikant, Praktikantin, Praktikanten
-    "praktika",
-    "internship",
-    "intern ",
-    "intern,",
-    "(intern)",
-    "working student",
-    "werkstudent",
-    "abschlussarbeit",  # thesis
-    "bachelorarbeit",
-    "masterarbeit",
-    "thesis",
-]
+# Intern / working-student / thesis positions (not real jobs). Matched as whole
+# words so "Intern" is caught (incl. as the last word) while "International" and
+# "Internal" are not. "praktik\w*" covers Praktikum / Praktikant(in) / Praktika.
+INTERN_TITLE_RE = re.compile(
+    r"\b("
+    r"intern|interns|internship|"
+    r"praktik\w*|"
+    r"werkstudent\w*|working\s+student|"
+    r"abschlussarbeit|bachelorarbeit|masterarbeit|diplomarbeit|thesis"
+    r")\b",
+    re.IGNORECASE,
+)
 
 # Relevance keywords – at least one must appear in title (not description)
 RELEVANCE_TITLE_KEYWORDS = [
@@ -275,9 +270,8 @@ def _job_key(title: str, company: str) -> str:
 
 
 def _is_intern_title(title: str) -> bool:
-    """Check if a job title indicates an intern/Praktikum position."""
-    t = title.lower()
-    return any(kw in t for kw in INTERN_TITLE_KEYWORDS)
+    """Check if a job title indicates an intern/working-student/thesis position."""
+    return bool(INTERN_TITLE_RE.search(title))
 
 
 def _is_relevant(title: str, description: str) -> bool:
